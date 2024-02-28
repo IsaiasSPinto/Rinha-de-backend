@@ -31,23 +31,24 @@ app.MapPost("clientes/{id}/transacoes", async (
     try
     {
         var result = await transacaoRepository.AddTransacao(transacao, id);
-        return Results.Ok(result);
+
+        if (!result.Success)
+        {
+            return result.Error?.StatusCode switch
+            {
+                400 => Results.BadRequest(),
+                404 => Results.NotFound("Cliente não encontrado"),
+                422 => Results.UnprocessableEntity(),
+                _ => Results.BadRequest()
+            };
+        }
+
+        return Results.Ok(result.Data);
+
     }
-    catch (TransacaoInvalidaException ex)
+    catch (Exception ex)
     {
-        return Results.BadRequest(ex.Message);
-    }
-    catch (ClienteNaoEncontradoException ex)
-    {
-        return Results.NotFound(ex.Message);
-    }
-    catch (SaldoInsuficienteException ex)
-    {
-        return Results.UnprocessableEntity(ex.Message);
-    }
-    catch (Exception)
-    {
-        return Results.BadRequest("Occoreu um erro ao adicionar a transacao.");
+        return Results.BadRequest();
     }
 });
 
@@ -57,16 +58,17 @@ app.MapGet("clientes/{id}/extrato", async (
     [FromServices] IClienteRepository clienteRepository,
     int id) =>
 {
-    var cliente = await clienteRepository.GetCliente(id);
+    var result = await clienteRepository.GetCliente(id);
 
-    if (cliente is null)
+    if (!result.Success)
     {
         return Results.NotFound("Cliente não encontrado");
     }
+    var cliente = result.Data;
 
     var trasacoes = await transacaoRepository.GetUltimasTrasacoes(id);
 
-    return Results.Ok(new ExtratoDto(new ClienteExtratoDto(cliente.Saldo, cliente.Limite), trasacoes));
+    return Results.Ok(new ExtratoDto(new ClienteExtratoDto(cliente.Saldo, cliente.Limite), trasacoes.Data));
 });
 
 app.Run();

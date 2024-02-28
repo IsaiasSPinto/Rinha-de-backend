@@ -1,11 +1,17 @@
 @Rinha_de_backend_HostAddress = http://localhost:5173
 
-GET {{Rinha_de_backend_HostAddress}}/todos/
+GET {{Rinha_de_backend_HostAddress}}/clientes/1/extrato
 Accept: application/json
 
 ###
 
-GET {{Rinha_de_backend_HostAddress}}/todos/1
+POST {{Rinha_de_backend_HostAddress}}/clientes/1/transacoes
 Accept: application/json
+Content-Type: application/json
 
+{
+    "valor": 100,
+    "tipo": "c",
+    "descricao": "produto"
+}
 ###

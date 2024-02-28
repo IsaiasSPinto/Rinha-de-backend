@@ -4,6 +4,6 @@ namespace Rinha_de_backend.Data.Repositories;
 
 public interface IClienteRepository
 {
-    public Task<ClienteDto> GetCliente(int clienteId);
+    public Task<Result<ClienteDto>> GetCliente(int clienteId);
 
 }

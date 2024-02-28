@@ -2,22 +2,17 @@
 
 namespace Rinha_de_backend.Data;
 
-public class RinhaDbContext
+public sealed class RinhaDbContext(IConfiguration configuration)
 {
-    private readonly IConfiguration _configuration;
-    public RinhaDbContext(IConfiguration configuration)
+    private NpgsqlConnection _connection;
+    private readonly NpgsqlDataSource dataSource =
+            new NpgsqlSlimDataSourceBuilder(configuration.GetConnectionString("Rinha"))
+            .Build();
+
+    public NpgsqlConnection CreateConnection()
     {
-        _configuration = configuration;
+        return dataSource.CreateConnection();
     }
-
-    public NpgsqlConnection GetConnection()
-    {
-        var connectionString = _configuration.GetConnectionString("Rinha");
-        var connection = new NpgsqlConnection(connectionString);
-        return connection;
-    }
-
-
 
 
 }

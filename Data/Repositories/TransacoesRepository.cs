@@ -1,6 +1,7 @@
 ﻿using Npgsql;
 using Rinha_de_backend.Dtos;
 using Rinha_de_backend.Exceptions;
+using System.Collections.Generic;
 
 namespace Rinha_de_backend.Data.Repositories;
 
@@ -10,72 +11,52 @@ public class TransacoesRepository : ITransacaoRepository
 
     public TransacoesRepository(RinhaDbContext context)
     {
-        _connection = context.GetConnection();
+        _connection = _connection = context.CreateConnection();
+
     }
 
-    public async Task<ClienteDto> AddTransacao(TransacaoDto transacao, int clienteId)
+    public async Task<Result<ClienteDto>> AddTransacao(TransacaoDto transacao, int clienteId)
     {
-        if (transacao.Tipo != "d" && transacao.Tipo != "c")
+        if ((transacao.Tipo != "d" && transacao.Tipo != "c") || transacao.Descricao.Length > 10)
         {
-            throw new TransacaoInvalidaException();
+            return Result<ClienteDto>.Failure(new ClienteDto(0, 0), new Error(400, "erro"));
         }
 
+        var command = _connection.CreateCommand();
         await _connection.OpenAsync();
 
-        var command = _connection.CreateCommand();
-        command.CommandText = "SELECT * FROM clientes WHERE id = @id";
-        command.Parameters.AddWithValue("id", clienteId);
+        command.CommandText = "SELECT * from atualizaSaldo(@clienteId, @valor, @descricao);";
+        command.Parameters.AddWithValue("clienteId", clienteId);
+        command.Parameters.AddWithValue("valor", transacao.Tipo == "d" ? transacao.Valor * -1 : transacao.Valor);
+        command.Parameters.AddWithValue("descricao", transacao.Descricao);
 
         var reader = await command.ExecuteReaderAsync();
-
-        ClienteDto cliente = null;
-
         while (await reader.ReadAsync())
         {
-            cliente = new ClienteDto(
-                reader["limite"] is not null ? (int)reader["limite"] : 0,
-                reader["saldo"] is not null ? (int)reader["saldo"] : 0);
+            if ((int)reader["result"] == 1)
+            {
+                return Result<ClienteDto>.Ok(new ClienteDto((int)reader["limitenovo"], (int)reader["saldoAtual"]));
+            }
+
+            if ((int)reader["result"] == -1)
+            {
+                return Result<ClienteDto>.Failure(new ClienteDto(0, 0), new Error(404, "Cliente nao encontrado"));
+
+            }
+
+            if ((int)reader["result"] == 0)
+            {
+                return Result<ClienteDto>.Failure(new ClienteDto(0, 0), new Error(422, "Saldo Insuficiente"));
+            }
         }
 
-        if (cliente is null)
-        {
-            throw new ClienteNaoEncontradoException();
-        }
-
-        cliente.Saldo -= transacao.Valor;
-
-        if (transacao.Tipo == "d" && (cliente.Saldo * -1) < cliente.Limite)
-        {
-            throw new SaldoInsuficienteException();
-        }
-
-        var insertTransaction = _connection.CreateCommand();
-        insertTransaction.CommandText = "INSERT INTO transacoes (valor, tipo, descricao, cliente_id,realizada_em) VALUES (@valor, @tipo, @descricao, @cliente_id,@realizada_em)";
-
-        insertTransaction.Parameters.AddWithValue("valor", transacao.Valor);
-        insertTransaction.Parameters.AddWithValue("tipo", transacao.Tipo);
-        insertTransaction.Parameters.AddWithValue("descricao", transacao.Descricao);
-        insertTransaction.Parameters.AddWithValue("cliente_id", clienteId);
-        insertTransaction.Parameters.AddWithValue("realizada_em", DateTime.Now);
-
-        await insertTransaction.ExecuteNonQueryAsync();
-
-
-        var updateSaldo = _connection.CreateCommand();
-        updateSaldo.CommandText = "UPDATE clientes SET saldo = @valor WHERE cliente_id = @id";
-        updateSaldo.Parameters.AddWithValue("valor", cliente.Saldo);
-        updateSaldo.Parameters.AddWithValue("id", clienteId);
-
-        await updateSaldo.ExecuteNonQueryAsync();
-
-        return cliente;
+        return Result<ClienteDto>.Failure(new ClienteDto(0, 0), new Error(400, "erro"));
     }
 
-    public async Task<List<UltimasTrasacoesDto>> GetUltimasTrasacoes(int clienteId)
+    public async Task<Result<List<UltimasTrasacoesDto>>> GetUltimasTrasacoes(int clienteId)
     {
-        await _connection.OpenAsync();
-
         var command = _connection.CreateCommand();
+        await _connection.OpenAsync();
 
         command.CommandText = "SELECT * FROM transacoes WHERE cliente_id = @cliente_id ORDER BY realizada_em DESC LIMIT 10";
 
@@ -94,6 +75,6 @@ public class TransacoesRepository : ITransacaoRepository
                 reader["realizada_em"] is not null ? (DateTime)reader["realizada_em"] : DateTime.MinValue));
         }
 
-        return ultimasTransacoes;
+        return Result<List<UltimasTrasacoesDto>>.Ok(ultimasTransacoes);
     }
 }
