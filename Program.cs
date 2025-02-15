@@ -23,44 +23,80 @@ app.MapPost("clientes/{id}/transacoes", async (
     int id,
     TransacaoDto transacao) =>
 {
+    var retry = 0;
+    var conn = await dataSource.OpenConnectionAsync();
     try
     {
-        var result = await transacaoRepository.AddTransacao(transacao, id, dataSource);
-
-        if (!result.Success)
+        while (retry <= 10)
         {
-            return result.Error?.StatusCode switch
+            try
             {
-                400 => Results.BadRequest(),
-                404 => Results.NotFound("Cliente não encontrado"),
-                422 => Results.UnprocessableEntity(),
-                _ => Results.BadRequest()
-            };
+
+                var result = await transacaoRepository.AddTransacao(transacao, id, conn);
+
+                if (!result.Success)
+                {
+                    return result.Error?.StatusCode switch
+                    {
+                        400 => Results.BadRequest(),
+                        404 => Results.NotFound("Cliente não encontrado"),
+                        422 => Results.UnprocessableEntity(),
+                        _ => Results.BadRequest()
+                    };
+                }
+
+                return Results.Ok(result.Data);
+
+            }
+            catch (NpgsqlException)
+            {
+                retry++;
+            }
         }
-
-        return Results.Ok(result.Data);
-
     }
-    catch (Exception ex)
+    catch (Exception)
     {
-        return Results.BadRequest();
+
+        return Results.UnprocessableEntity();
     }
+    finally
+    {
+        await conn.CloseAsync();
+    }
+
+    return Results.UnprocessableEntity();
+
 });
+
+
 
 
 app.MapGet("clientes/{id}/extrato", async (
     [FromServices] ITransacaoRepository transacaoRepository,
     int id) =>
 {
-    var result = await transacaoRepository.GetUltimasTrasacoes(id, dataSource);
-
-    if (!result.Success)
+    var conn = await dataSource.OpenConnectionAsync();
+    try
     {
-        return Results.NotFound("Cliente não encontrado");
+
+        var result = await transacaoRepository.GetUltimasTrasacoes(id, conn);
+
+        if (!result.Success)
+        {
+            return Results.NotFound("Cliente não encontrado");
+        }
+
+
+        return Results.Ok(result.Data);
     }
-
-
-    return Results.Ok(result.Data);
+    catch (Exception)
+    {
+        return Results.BadRequest();
+    }
+    finally
+    {
+        await conn.CloseAsync();
+    }
 });
 
 app.Run();

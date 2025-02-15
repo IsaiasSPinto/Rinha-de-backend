@@ -5,6 +5,6 @@ namespace Rinha_de_backend.Data.Repositories;
 
 public interface ITransacaoRepository
 {
-    public Task<Result<ExtratoDto>> GetUltimasTrasacoes(int clienteId, NpgsqlDataSource dataSource);
-    public Task<Result<ClienteDto>> AddTransacao(TransacaoDto transacao, int clienteId, NpgsqlDataSource dataSource);
+    public Task<Result<ExtratoDto>> GetUltimasTrasacoes(int clienteId, NpgsqlConnection conn);
+    public Task<Result<ClienteDto>> AddTransacao(TransacaoDto transacao, int clienteId, NpgsqlConnection conn);
 }
